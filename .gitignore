@@ -2,6 +2,8 @@
 backup/
 dtb/
 recovery/
+# console rings pulled from the phone (tools/sweet-log-pull.sh)
+logs/
 # third-party/Apple sources fetched for reading
 research/
 shim/out/

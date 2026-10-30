@@ -6,7 +6,43 @@ hardware table and the plan; this file is the short handoff.
 
 ## State
 
-### NEXT SESSION — start here (2026-10-23, after the input milestone)
+### NEXT SESSION — start here (2026-10-30): the root volume on the phone is corrupt
+
+First iOS boot of a fresh flash of `~/ipsw-x/ios16-root-20H392.img` (built on this Linux box on
+Oct 28 by `mkiosroot.sh`; boot = default `build-fajita.sh` cmdline, `rootrw=1`, GPU probe off).
+Ring pulled from OrangeFox: `logs/sweetlog-1030-crash.txt` (one boot, no kernel panic).
+
+- **Symptom**: SpringBoard SIGILL loop, 109 times, always
+  `cs_invalid_page(0x1c1ed0000)` + `Text page corruption detected` = unslid 0x189bd0000 =
+  `dyld_shared_cache_arm64.03` file offset 0x2e44000.
+- **On the phone**, `.03` (iNode418438485, vol blocks 2264595+28272) has file blocks 11101-12655
+  (6.2 MiB) overwritten by new files: `MediaLibrary.sqlitedb-wal`, `healthdb.sqlite-wal`,
+  `SystemDataOnly-com.apple.LaunchServices-4035-v2.csstore`. The catalog really allocated those
+  blocks to them, so iOS believed they were free.
+- **The local image is clean**: its bitmap vs catalog has 0 owned-but-free blocks and 0 overlapping
+  extents. The journal was uninitialised (flags 0x5, magic 0; iOS logged `Initializing the journal`),
+  so the old "stale journal after fsck" explanation does **not** apply to this boot.
+- **Phone bitmap**: 527,372 blocks of 45,072 live catalog files are marked free (11 shared-cache
+  inodes, locationd, fairplayd, ICU...), and areas still holding old Android data (ELF `.so`) are
+  marked allocated. Damage is whole bitmap blocks: 0-4, 61-76, 93-116. Their contents are not
+  bitmaps: bitmap block 0 begins with `EFI PART` (the GPT header the driver reads at init), and
+  blocks 62/70 hold HFS B-tree leaf nodes. The pending journal transactions match the disk, so HFS
+  itself believed this data: some bitmap **reads returned other I/O's data** (stale bounce buffer
+  or wrong block), and HFS wrote it back. First sign is at log line 1017 (`BlockMarkFreeInternal`
+  on blocks inside the DriverKit cache), about 2 minutes into the boot.
+- Ruled out: `__ARM_COHERENT_IO__` (not defined in SWEET.h, so `flush_dcache64` really cleans and
+  invalidates by VA); journal 8x-offset from `DKIOCSETBLOCKSIZE` (no journal data at 8x); GPU arena.
+- Suspects in `bsd/dev/sweet_ufs.c` (not proven): `ufs_scsi()` accepts a read without checking the
+  RESPONSE UPIU residual transfer count, so a short or empty transfer returns stale bounce data;
+  `DKIOCSETBLOCKSIZE` changes the global `su.secsize` shared by the block and raw devices.
+- **Next**: (1) reflash `userdata` from `ios16-root-20H392.img` (user confirmation needed);
+  (2) boot **without `rootrw=1`** (read-only root; NOTES 10-29 shows iOS reaches the UI that way),
+  so a bad read cannot become persistent damage; (3) add a debug read-verify to `sweet_ufs.c`
+  (log the residual count; optionally read every metadata block twice and compare) before going
+  back to `rootrw=1`.
+- Scratch analysis scripts and dumps: `~/Downloads/ios-fajita-scratch/` (outside git).
+
+### Previous handoff (2026-10-23, after the input milestone)
 **iOS 16.7.16 (iPhone X, 20H392) runs on the OnePlus 6T with its GUI, working
 touch and working keys** — lock screen appears and responds, on all eight
 cores. Reached 2026-10-23 ~12:30.
