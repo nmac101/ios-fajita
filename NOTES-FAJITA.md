@@ -35,10 +35,16 @@ The earlier `sweet_ufs.c` "bad read" theory is **withdrawn**; no evidence of a d
   never carries `kIOHIDDigitizerEventFromEdgeTip` and SpringBoard never starts the home gesture.
   **0176** (`0176-fajita-touch-bottom-edge.patch`) uses 2339; generated from the CI-shaped
   SweetHID.cpp (0058/0060/0061/0062/0071/0072/0099/0158), `git apply --check` OK. Pushed `cec9e0c`.
-- **CI blocked: macOS 14 runner brownout** (run `41141184520` failed in 1 s). Brownouts daily
-  14:00-00:00 UTC until **macos-14 is retired 2026-11-02**. Re-run after 00:00 UTC:
-  `gh run rerun 41141184520`. After Nov 2 the workflow must move to macos-15/26, whose Xcode 16
-  `iig` emits IORPC.kernelContent that xnu-8796 lacks (see the comment in `xnu.yml`) - unsolved.
+- **CI moved to macos-15 and works (run `41144352646`, 11 min):** `xnu.yml` has a `runner` input
+  (default macos-14, retired 2026-11-02; use `gh workflow run xnu.yml -f runner=macos-15`). macos-15
+  only has Xcode 16+/26 (the Deps step picks 16.0 = `sort -V | head -1`), yet all 176 patches applied
+  (same blacktop skips as macos-14) and the kernel built, so the old IORPC/iig worry did not bite.
+  Default now macos-15.
+- **0176 kernel** `xnu/out-0176` SHA256 `6ee5249f...d0aa`: disassembly shows the y clamp 2339 and the
+  edge test `y - 2292` (y > 2291). Image `shim/out/shim-boot-0176.img` (SHA256 `59c9ca27...f9e3`,
+  86 MB: too big for boot_a, `fastboot boot` only; ~/gpu-fw is missing on this Linux box so the GPU
+  firmware blobs are zero - the UI does not need them). Booted with `fastboot boot` 23:4x UTC.
+  Result of the swipe-up test: pending.
 - Scratch analysis scripts/dumps: `~/Downloads/ios-fajita-scratch/` (outside git).
 
 ### Previous handoff (2026-10-23, after the input milestone)
