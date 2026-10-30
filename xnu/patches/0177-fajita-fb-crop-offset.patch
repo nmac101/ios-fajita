@@ -1,0 +1,38 @@
+diff --git a/iokit/Kernel/arm/SweetFramebuffer.cpp b/iokit/Kernel/arm/SweetFramebuffer.cpp
+index b89e7be..8a8ca8f 100644
+--- a/iokit/Kernel/arm/SweetFramebuffer.cpp
++++ b/iokit/Kernel/arm/SweetFramebuffer.cpp
+@@ -189,6 +189,14 @@ AppleCLCD::start(IOService *provider)
+ 	}
+ 	fOffX = (int32_t)(fLogicalW - fWidth) / 2;
+ 	fOffY = (int32_t)(fLogicalH - fHeight) / 2;
++	/* sweetfb_offx/offy: which part of the logical screen the panel shows (default centred). */
++	int off;
++	if (PE_parse_boot_argn("sweetfb_offx", &off, sizeof(off)) && off >= 0 && off <= (int)(fLogicalW - fWidth)) {
++		fOffX = off;
++	}
++	if (PE_parse_boot_argn("sweetfb_offy", &off, sizeof(off)) && off >= 0 && off <= (int)(fLogicalH - fHeight)) {
++		fOffY = off;
++	}
+ 	fLock = IOLockAlloc();
+ 	fClients = OSArray::withCapacity(4);
+ 	fSurface = sweet_surface_create_physical(fPhys, fWidth, fHeight, fRowBytes, SWEET_FB_FORMAT_BGRA);
+diff --git a/iokit/Kernel/arm/hid/SweetHID.cpp b/iokit/Kernel/arm/hid/SweetHID.cpp
+index 7e80e72..a0d781a 100644
+--- a/iokit/Kernel/arm/hid/SweetHID.cpp
++++ b/iokit/Kernel/arm/hid/SweetHID.cpp
+@@ -438,6 +438,14 @@ SweetHIDTouch::start(IOService *provider)
+ 	fLogicalH = native ? 2340 : 2436;
+ 	fOffX = (fLogicalW - 1080) / 2;
+ 	fOffY = (fLogicalH - 2340) / 2;
++	/* Same crop as SweetFramebuffer (sweetfb_offx/offy), so touches land where they are drawn. */
++	int off;
++	if (PE_parse_boot_argn("sweetfb_offx", &off, sizeof(off)) && off >= 0 && off <= fLogicalW - 1080) {
++		fOffX = off;
++	}
++	if (PE_parse_boot_argn("sweetfb_offy", &off, sizeof(off)) && off >= 0 && off <= fLogicalH - 2340) {
++		fOffY = off;
++	}
+ 	/* The digitizer covers the main display (backboardd maps it 1:1). */
+ 	setProperty("DisplayIntegrated", kOSBooleanTrue);
+ 	setProperty("SurfaceWidth", (unsigned long long)(68 << 16), 32);	/* mm, 16.16 */

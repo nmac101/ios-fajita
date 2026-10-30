@@ -44,7 +44,7 @@ The earlier `sweet_ufs.c` "bad read" theory is **withdrawn**; no evidence of a d
   edge test `y - 2292` (y > 2291). Image `shim/out/shim-boot-0176.img` (SHA256 `59c9ca27...f9e3`,
   86 MB: too big for boot_a, `fastboot boot` only; ~/gpu-fw is missing on this Linux box so the GPU
   firmware blobs are zero - the UI does not need them). Booted with `fastboot boot` 23:4x UTC.
-  Result of the swipe-up test: pending.
+  **Swipe-up home gesture WORKS on the 6T with 0176 (user, 2026-10-30).**
 - Scratch analysis scripts/dumps: `~/Downloads/ios-fajita-scratch/` (outside git).
 
 ### Previous handoff (2026-10-23, after the input milestone)
