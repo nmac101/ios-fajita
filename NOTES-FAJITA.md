@@ -6,41 +6,31 @@ hardware table and the plan; this file is the short handoff.
 
 ## State
 
-### NEXT SESSION — start here (2026-10-30): the root volume on the phone is corrupt
+### NEXT SESSION — start here (2026-10-30): root reflashed; cause of the corruption found
 
-First iOS boot of a fresh flash of `~/ipsw-x/ios16-root-20H392.img` (built on this Linux box on
-Oct 28 by `mkiosroot.sh`; boot = default `build-fajita.sh` cmdline, `rootrw=1`, GPU probe off).
-Ring pulled from OrangeFox: `logs/sweetlog-1030-crash.txt` (one boot, no kernel panic).
+**ROOT CAUSE (proven):** a **stale backup GPT** sat in the last block of `userdata` (block
+0x1B800BA, from an old Linux image; disk GUID `24c8f14c-3f61-a64d-...`). Something on the phone
+(ABL or OrangeFox, not determined) "repaired" the primary GPT from it, writing a protective MBR into
+block 0 bytes 446-511 and the GPT header + entries into **blocks 1-5 = HFS bitmap blocks 0-4**. iOS
+then saw volume blocks 0-163,839 as free and allocated new files on top of live ones (including the
+bitmap itself and `dyld_shared_cache_arm64.03`) -> SpringBoard `cs_invalid_page` SIGILL loop.
+Evidence: the GPT came back byte-identical (same GUID + CRC) after a full `userdata` flash; zeroing
+the backup header stopped it (survived `adb reboot bootloader` + `fastboot boot` OrangeFox).
+The earlier `sweet_ufs.c` "bad read" theory is **withdrawn**; no evidence of a driver bug remains.
 
-- **Symptom**: SpringBoard SIGILL loop, 109 times, always
-  `cs_invalid_page(0x1c1ed0000)` + `Text page corruption detected` = unslid 0x189bd0000 =
-  `dyld_shared_cache_arm64.03` file offset 0x2e44000.
-- **On the phone**, `.03` (iNode418438485, vol blocks 2264595+28272) has file blocks 11101-12655
-  (6.2 MiB) overwritten by new files: `MediaLibrary.sqlitedb-wal`, `healthdb.sqlite-wal`,
-  `SystemDataOnly-com.apple.LaunchServices-4035-v2.csstore`. The catalog really allocated those
-  blocks to them, so iOS believed they were free.
-- **The local image is clean**: its bitmap vs catalog has 0 owned-but-free blocks and 0 overlapping
-  extents. The journal was uninitialised (flags 0x5, magic 0; iOS logged `Initializing the journal`),
-  so the old "stale journal after fsck" explanation does **not** apply to this boot.
-- **Phone bitmap**: 527,372 blocks of 45,072 live catalog files are marked free (11 shared-cache
-  inodes, locationd, fairplayd, ICU...), and areas still holding old Android data (ELF `.so`) are
-  marked allocated. Damage is whole bitmap blocks: 0-4, 61-76, 93-116. Their contents are not
-  bitmaps: bitmap block 0 begins with `EFI PART` (the GPT header the driver reads at init), and
-  blocks 62/70 hold HFS B-tree leaf nodes. The pending journal transactions match the disk, so HFS
-  itself believed this data: some bitmap **reads returned other I/O's data** (stale bounce buffer
-  or wrong block), and HFS wrote it back. First sign is at log line 1017 (`BlockMarkFreeInternal`
-  on blocks inside the DriverKit cache), about 2 minutes into the boot.
-- Ruled out: `__ARM_COHERENT_IO__` (not defined in SWEET.h, so `flush_dcache64` really cleans and
-  invalidates by VA); journal 8x-offset from `DKIOCSETBLOCKSIZE` (no journal data at 8x); GPU arena.
-- Suspects in `bsd/dev/sweet_ufs.c` (not proven): `ufs_scsi()` accepts a read without checking the
-  RESPONSE UPIU residual transfer count, so a short or empty transfer returns stale bounce data;
-  `DKIOCSETBLOCKSIZE` changes the global `su.secsize` shared by the block and raw devices.
-- **Next**: (1) reflash `userdata` from `ios16-root-20H392.img` (user confirmation needed);
-  (2) boot **without `rootrw=1`** (read-only root; NOTES 10-29 shows iOS reaches the UI that way),
-  so a bad read cannot become persistent damage; (3) add a debug read-verify to `sweet_ufs.c`
-  (log the residual count; optionally read every metadata block twice and compare) before going
-  back to `rootrw=1`.
-- Scratch analysis scripts and dumps: `~/Downloads/ios-fajita-scratch/` (outside git).
+- Crash log: `logs/sweetlog-1030-crash.txt` (ring pulled from OrangeFox, one boot, no panic).
+- Reflashed 2026-10-30 21:5x UTC: `img2simg ~/ipsw-x/ios16-root-20H392.img` -> `.simg` (12.1 GB),
+  `fastboot flash userdata` 16/16 OKAY in 352 s. Then (from OrangeFox) blocks 0-5 rewritten from
+  the image and block 0x1B800BA zeroed (backups of the old contents in
+  `~/Downloads/ios-fajita-scratch/phone-blk0-5-before.bin`, `backup-gpt-hdr.bin`).
+- Verified on the device: header + whole bitmap, extents/catalog/attributes B-trees, journal, and the
+  whole `.03` cache file are byte-identical to the image. Free blocks still hold old data (the image's
+  holes become DONT_CARE), which HFS never reads. Sparse FILL chunks were checked and DO get written.
+- **Rule:** after any `userdata` flash check `dd ... skip=1 count=1 | head -c 8` is not `EFI PART`,
+  and never leave a GPT header in the last block of `userdata`.
+- Next: boot iOS (`tools/build-fajita.sh` default image) and pull the log; `rootrw=1` should be safe
+  again.
+- Scratch analysis scripts/dumps: `~/Downloads/ios-fajita-scratch/` (outside git).
 
 ### Previous handoff (2026-10-23, after the input milestone)
 **iOS 16.7.16 (iPhone X, 20H392) runs on the OnePlus 6T with its GUI, working
