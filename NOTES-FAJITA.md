@@ -30,6 +30,15 @@ The earlier `sweet_ufs.c` "bad read" theory is **withdrawn**; no evidence of a d
   and never leave a GPT header in the last block of `userdata`.
 - Next: boot iOS (`tools/build-fajita.sh` default image) and pull the log; `rootrw=1` should be safe
   again.
+- **No home gesture on the 6T (user, after the reflash boot):** `0071` flags edge contacts with
+  `y > 2399 - 48` (sweet's 2400-row panel); the 6T reports at most y=2339, so a bottom-edge swipe
+  never carries `kIOHIDDigitizerEventFromEdgeTip` and SpringBoard never starts the home gesture.
+  **0176** (`0176-fajita-touch-bottom-edge.patch`) uses 2339; generated from the CI-shaped
+  SweetHID.cpp (0058/0060/0061/0062/0071/0072/0099/0158), `git apply --check` OK. Pushed `cec9e0c`.
+- **CI blocked: macOS 14 runner brownout** (run `41141184520` failed in 1 s). Brownouts daily
+  14:00-00:00 UTC until **macos-14 is retired 2026-11-02**. Re-run after 00:00 UTC:
+  `gh run rerun 41141184520`. After Nov 2 the workflow must move to macos-15/26, whose Xcode 16
+  `iig` emits IORPC.kernelContent that xnu-8796 lacks (see the comment in `xnu.yml`) - unsolved.
 - Scratch analysis scripts/dumps: `~/Downloads/ios-fajita-scratch/` (outside git).
 
 ### Previous handoff (2026-10-23, after the input milestone)
