@@ -45,6 +45,14 @@ The earlier `sweet_ufs.c` "bad read" theory is **withdrawn**; no evidence of a d
   86 MB: too big for boot_a, `fastboot boot` only; ~/gpu-fw is missing on this Linux box so the GPU
   firmware blobs are zero - the UI does not need them). Booted with `fastboot boot` 23:4x UTC.
   **Swipe-up home gesture WORKS on the 6T with 0176 (user, 2026-10-30).**
+- **Status bar out of place (user):** the panel shows the 1125x2436 iPhone X screen centre-cropped
+  (offsets 22/48), so the clock and icons sit 48 px higher, in the panel's rounded corners. **0177**:
+  boot-args `sweetfb_offx`/`sweetfb_offy` pick the crop (0..45 / 0..96, default centred), read by
+  both SweetFramebuffer and SweetHIDTouch so touches stay aligned. CI `41146642772` (macos-15) ->
+  `xnu/out-0177` SHA256 `8b4bbdb0...0166`. Test images (fastboot boot only, 86 MB):
+  `shim/out/shim-boot-0177-y0.img` (top aligned; costs the bottom 96 px = home indicator + dock
+  bottom) and `-y24.img` (half way). Result pending. Proper fix still = native panel + safe-area
+  insets (see "Cosmetics backlog").
 - Scratch analysis scripts/dumps: `~/Downloads/ios-fajita-scratch/` (outside git).
 
 ### Previous handoff (2026-10-23, after the input milestone)
