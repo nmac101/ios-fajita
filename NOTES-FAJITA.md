@@ -59,6 +59,14 @@ The earlier `sweet_ufs.c` "bad read" theory is **withdrawn**; no evidence of a d
   CI `41148483830` -> `xnu/out-0178` SHA256 `b186f463...d9d6`; image `shim/out/shim-boot-0178.img`
   (default cmdline). Result pending. Proper fix still = native panel + safe-area
   insets (see "Cosmetics backlog").
+- **Flash userdata through ADB sideload (user request, 2026-10-31):** `tools/flash-userdata-sideload.sh
+  [IMAGE]` builds `IMAGE-sideload.zip` with `tools/mk-sideload-zip.py` (gzip of the image stored at a
+  1 MiB boundary + a shell `update-binary` that does `dd | gzip -dc | dd` to the `userdata` block
+  device, checks PARTNAME=userdata, verifies the SHA-256 of the written bytes, clears a stale backup
+  GPT) and runs `adb sideload`. OrangeFox: Advanced > ADB Sideload first. **Limit found:** a stored
+  16 GiB zip fails with `file has too many blocks (262161)` (Android sideload FUSE max = 262144 x 64
+  KiB = 16 GiB) - hence gzip (zip is 6.1 GB). Toybox in OrangeFox has gzip/dd/sha256sum/blockdev. The
+  pipeline was replayed on the host and reproduces the image SHA (`569f4099...6a81`).
 - Scratch analysis scripts/dumps: `~/Downloads/ios-fajita-scratch/` (outside git).
 
 ### Previous handoff (2026-10-23, after the input milestone)

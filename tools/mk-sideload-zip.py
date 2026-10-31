@@ -3,11 +3,12 @@
 
     mk-sideload-zip.py IMAGE OUT.zip
 
-The image is stored (not compressed) and starts at a 1 MiB boundary of the zip, so
-update-binary copies it with dd and needs no unzip on the phone. Flash it with
+The image goes in as a gzip stream, stored in the zip at a 1 MiB boundary, so update-binary
+runs `dd | gzip -dc | dd` and needs no unzip on the phone. Compression matters: Android's
+sideload FUSE refuses files over 262144 blocks of 64 KiB (16 GiB), the size of the image. Flash it with
 tools/flash-userdata-sideload.sh (OrangeFox: Advanced > ADB Sideload).
 """
-import hashlib, os, sys, zipfile
+import gzip, hashlib, os, shutil, sys, zipfile
 
 MIB = 1 << 20
 SCRIPT = r'''#!/sbin/sh
@@ -20,13 +21,8 @@ DEV=$(readlink -f /dev/block/by-name/userdata)
 grep -q '^PARTNAME=userdata$' /sys/class/block/${DEV##*/}/uevent || die "$DEV is not userdata"
 BYTES=$(blockdev --getsize64 $DEV)
 [ "$BYTES" -ge @SIZE@ ] || die "userdata ($BYTES B) is smaller than the image"
-ui "Writing @SIZE@ bytes to $DEV"
-i=0
-while [ $i -lt @CHUNKS@ ]; do
-  dd if="$ZIP" of=$DEV bs=1048576 skip=$((@OFFSET_MIB@ + i * 256)) seek=$((i * 256)) count=256 conv=notrunc 2>/dev/null || die "write failed at chunk $i"
-  i=$((i + 1))
-  ui "$((i * 100 / @CHUNKS@))%"
-done
+ui "Writing @SIZE@ bytes to $DEV (about 10 minutes, no progress shown)"
+dd if="$ZIP" bs=1048576 skip=@OFFSET_MIB@ count=@GZMIB@ 2>/dev/null | gzip -dc 2>/dev/null | dd of=$DEV bs=1048576 conv=notrunc 2>/dev/null
 sync
 ui "Verifying"
 SUM=$(dd if=$DEV bs=1048576 count=@MIB@ 2>/dev/null | sha256sum | cut -d' ' -f1)
@@ -43,34 +39,39 @@ exit 0
 
 img, out = sys.argv[1:3]
 size = os.path.getsize(img)
-assert size % MIB == 0 and size % (256 * MIB) == 0, "image size must be a multiple of 256 MiB"
+assert size % MIB == 0, "image size must be a multiple of 1 MiB"
 h = hashlib.sha256()
 with open(img, 'rb') as f:
     while b := f.read(8 * MIB):
         h.update(b)
 
+gz = out + '.gz.tmp'
+with open(img, 'rb') as f, open(gz, 'wb') as raw, gzip.GzipFile(fileobj=raw, mode='wb', compresslevel=3, mtime=0) as g:
+    shutil.copyfileobj(f, g, 8 * MIB)
+gzsize = -(-os.path.getsize(gz) // MIB) * MIB   # padded with zeros to whole MiB (gzip ignores trailing zeros)
+with open(gz, 'ab') as raw:
+    raw.truncate(gzsize)
+
 with zipfile.ZipFile(out, 'w', zipfile.ZIP_STORED, allowZip64=True) as z:
-    # Header of the image entry: 30 + name + 20 (zip64 extra). Pad the first entry so the data starts on 1 MiB.
-    name = 'userdata.img'
-    hdr2 = 30 + len(name) + 20
+    name = 'userdata.img.gz'
+    hdr2 = 30 + len(name) + 20       # local header with the zip64 extra
     hdr1 = 30 + len('pad')
     pad = (-(hdr1 + hdr2)) % MIB
     z.writestr(zipfile.ZipInfo('pad'), b'\0' * pad)
-    update = (SCRIPT.replace('@SIZE@', str(size)).replace('@CHUNKS@', str(size // (256 * MIB)))
-              .replace('@OFFSET_MIB@', str((hdr1 + pad + hdr2) // MIB)).replace('@MIB@', str(size // MIB))
+    off = hdr1 + pad + hdr2
+    update = (SCRIPT.replace('@SIZE@', str(size)).replace('@MIB@', str(size // MIB))
+              .replace('@OFFSET_MIB@', str(off // MIB)).replace('@GZMIB@', str(gzsize // MIB))
               .replace('@SHA@', h.hexdigest()))
-    with z.open(zipfile.ZipInfo(name), 'w', force_zip64=True) as d, open(img, 'rb') as f:
-        while b := f.read(8 * MIB):
-            d.write(b)
+    with z.open(zipfile.ZipInfo(name), 'w', force_zip64=True) as d, open(gz, 'rb') as f:
+        shutil.copyfileobj(f, d, 8 * MIB)
     z.writestr(zipfile.ZipInfo('META-INF/com/google/android/update-binary'), update)
     z.writestr('META-INF/com/google/android/updater-script', '# update-binary does the work\n')
 
-# self-check: the image bytes must sit at the offset the script uses
-off = (hdr1 + pad + hdr2)
+# self-check: the gzip bytes sit at the offset the script uses, and the stream decompresses to the image
 assert off % MIB == 0
-with open(out, 'rb') as zf, open(img, 'rb') as f:
-    zf.seek(off); f.seek(0)
-    assert zf.read(4096) == f.read(4096), "image not at the expected offset"
-    zf.seek(off + size - 4096); f.seek(size - 4096)
-    assert zf.read(4096) == f.read(4096), "image not at the expected offset"
-print(f"{out}: {os.path.getsize(out)} bytes, image at {off // MIB} MiB, sha256 {h.hexdigest()}")
+with open(out, 'rb') as zf, open(gz, 'rb') as f:
+    zf.seek(off)
+    assert zf.read(4096) == f.read(4096), "gzip data not at the expected offset"
+os.remove(gz)
+assert os.path.getsize(out) < 16 * 1024 * MIB, "zip over the 16 GiB sideload limit"
+print(f"{out}: {os.path.getsize(out)} bytes, gzip at {off // MIB} MiB ({gzsize // MIB} MiB), sha256 {h.hexdigest()}")
