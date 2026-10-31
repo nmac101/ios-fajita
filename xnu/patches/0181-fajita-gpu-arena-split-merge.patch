@@ -1,0 +1,139 @@
+diff --git a/bsd/dev/sweet_gpu.c b/bsd/dev/sweet_gpu.c
+index 4bb2619..8a9d31f 100644
+--- a/bsd/dev/sweet_gpu.c
++++ b/bsd/dev/sweet_gpu.c
+@@ -524,57 +524,109 @@ static vm_offset_t gpu_pt_blob;      /* where the page tables live */
+ /*
+  * Arena blocks. bgmtl-adddev runs several times per boot (launchd restarts it after each crash) and
+  * every run used to leak its buffers, which filled the 40 MiB arena in five goes; a freed block is
+- * now handed out again. First fit, no splitting, no coalescing - the workloads are few and chunky.
++ * now handed out again. Best fit; a bigger free block is split and a freed block is merged with free
++ * neighbours (QuartzCore mixes 16 KiB and 12 MiB buffers, which a no-split list fragmented within a
++ * minute), and free blocks at the top hand their space back to the bump pointer. Used blocks are
++ * matched by offset alone. gpu_bo_alloc() bumps gpu_arena_used without a block; such space is above
++ * every block it follows, so it is never merged and never handed back.
+  */
++/* BEGIN arena allocator (host-tested: ios-fajita-scratch/arena) */
+ #define GPU_ARENA_BLOCKS       512u
+ static struct gpu_arena_block {
+ 	uint32_t off;
+-	uint32_t size;
++	uint32_t size;          /* 0 = slot unused */
+ 	bool used;
+ } gpu_arena_blocks[GPU_ARENA_BLOCKS];
+ 
++static struct gpu_arena_block *
++gpu_arena_slot(void)
++{
++	for (unsigned i = 0; i < GPU_ARENA_BLOCKS; i++) {
++		if (gpu_arena_blocks[i].size == 0) {
++			return &gpu_arena_blocks[i];
++		}
++	}
++	return NULL;
++}
++
+ static void
+ gpu_arena_give_back(uint32_t off, uint32_t size)
+ {
++	struct gpu_arena_block *b = NULL;
++
++	(void)size;
+ 	for (unsigned i = 0; i < GPU_ARENA_BLOCKS; i++) {
+-		if (gpu_arena_blocks[i].used && gpu_arena_blocks[i].off == off &&
+-		    gpu_arena_blocks[i].size == size) {
+-			gpu_arena_blocks[i].used = false;
+-			return;
++		if (gpu_arena_blocks[i].size != 0 && gpu_arena_blocks[i].used && gpu_arena_blocks[i].off == off) {
++			b = &gpu_arena_blocks[i];
++			break;
++		}
++	}
++	if (b == NULL) {
++		return;
++	}
++	b->used = false;
++	for (bool merged = true; merged;) {
++		merged = false;
++		for (unsigned i = 0; i < GPU_ARENA_BLOCKS; i++) {
++			struct gpu_arena_block *n = &gpu_arena_blocks[i];
++			if (n == b || n->size == 0 || n->used) {
++				continue;
++			}
++			if (n->off == b->off + b->size) {
++				b->size += n->size;
++			} else if (n->off + n->size == b->off) {
++				b->off = n->off;
++				b->size += n->size;
++			} else {
++				continue;
++			}
++			n->size = 0;
++			merged = true;
+ 		}
+ 	}
++	if (b->off + b->size == gpu_arena_used) {
++		gpu_arena_used = b->off;
++		b->size = 0;
++	}
+ }
+ 
+-/* Reserve SZ bytes: a freed block of that size or larger, else the bump pointer. */
++/* Reserve SZ bytes: the smallest free block that fits (split), else the bump pointer. */
+ static bool
+ gpu_arena_take(uint32_t sz, uint32_t *off)
+ {
++	struct gpu_arena_block *best = NULL;
++
+ 	for (unsigned i = 0; i < GPU_ARENA_BLOCKS; i++) {
+-		if (gpu_arena_blocks[i].size == 0) {
+-			continue;
++		struct gpu_arena_block *b = &gpu_arena_blocks[i];
++		if (b->size != 0 && !b->used && b->size >= sz && (best == NULL || b->size < best->size)) {
++			best = b;
+ 		}
+-		if (!gpu_arena_blocks[i].used && gpu_arena_blocks[i].size >= sz) {
+-			gpu_arena_blocks[i].used = true;
+-			*off = gpu_arena_blocks[i].off;
+-			return true;
++	}
++	if (best != NULL) {
++		struct gpu_arena_block *rest = best->size > sz ? gpu_arena_slot() : NULL;
++		if (rest != NULL) {
++			rest->off = best->off + sz;
++			rest->size = best->size - sz;
++			rest->used = false;
++			best->size = sz;
+ 		}
++		best->used = true;
++		*off = best->off;
++		return true;
+ 	}
+ 	uint32_t o = (gpu_arena_used + 0xfffu) & ~0xfffu;
+-	if ((uint64_t)o + sz > gpu_arena_size) {
++	struct gpu_arena_block *b = gpu_arena_slot();
++	if ((uint64_t)o + sz > gpu_arena_size || b == NULL) {
+ 		return false;
+ 	}
+-	for (unsigned i = 0; i < GPU_ARENA_BLOCKS; i++) {
+-		if (gpu_arena_blocks[i].size == 0) {
+-			gpu_arena_blocks[i].off = o;
+-			gpu_arena_blocks[i].size = sz;
+-			gpu_arena_blocks[i].used = true;
+-			gpu_arena_used = o + sz;
+-			*off = o;
+-			return true;
+-		}
+-	}
+-	return false;
++	b->off = o;
++	b->size = sz;
++	b->used = true;
++	gpu_arena_used = o + sz;
++	*off = o;
++	return true;
+ }
++/* END arena allocator */
+ 
+ /* The kernel alias of an offset in the arena; every buffer lives inside one window. */
+ static vm_offset_t
