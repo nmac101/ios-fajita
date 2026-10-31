@@ -1,0 +1,51 @@
+diff --git a/iokit/Kernel/arm/SweetAdreno.cpp b/iokit/Kernel/arm/SweetAdreno.cpp
+index c6458b2..c5b70a3 100644
+--- a/iokit/Kernel/arm/SweetAdreno.cpp
++++ b/iokit/Kernel/arm/SweetAdreno.cpp
+@@ -46,6 +46,8 @@ bool sweet_gpu_iova_alloc(uint64_t size, uint64_t *iova, uint64_t *taken);
+ bool sweet_gpu_iova_reserve(uint64_t iova, uint64_t size);
+ void sweet_gpu_iova_free(uint64_t iova, uint64_t size);
+ bool sweet_gpu_vm_map(uint64_t iova, uint64_t pa, bool readonly);
++/* sweet_gpu_vm_map() enters ONE 4 KiB GPU page; the kernel pages here are 16 KiB (PAGE_SIZE). */
++#define GPU_PAGE 0x1000ull
+ void sweet_gpu_vm_unmap(uint64_t iova, uint64_t size);
+ void sweet_gpu_cache_sync(void *va, size_t len);
+ uint32_t sweet_gpu_submit(const uint64_t *ib_iova, const uint32_t *ib_dwords, unsigned count);
+@@ -357,7 +359,7 @@ SweetAdrenoUserClient::mapGem(struct sweet_gem *slot, uint32_t flags, uint32_t *
+ 	}
+ 	bool ok = true;
+ 	uint64_t mapped = 0;
+-	for (; mapped < size && ok; mapped += PAGE_SIZE) {
++	for (; mapped < size && ok; mapped += GPU_PAGE) {
+ 		uint64_t pa;
+ 		if (slot->pa != 0) {
+ 			/* GEM_NEW: the arena address is already known, no descriptor walk needed. */
+@@ -366,16 +368,16 @@ SweetAdrenoUserClient::mapGem(struct sweet_gem *slot, uint32_t flags, uint32_t *
+ 			IOByteCount length = 0;
+ 			pa = (uint64_t)slot->md->getPhysicalSegment(mapped, &length, kIOMemoryMapperNone);
+ 		}
+-		ok = pa != 0 && (pa & (PAGE_SIZE - 1)) == 0 && sweet_gpu_vm_map(iova + mapped, pa, ro);
++		ok = pa != 0 && (pa & (GPU_PAGE - 1)) == 0 && sweet_gpu_vm_map(iova + mapped, pa, ro);
+ 		if (!ok) {
+ 			IOLog("SWEET GPU: mapGem page %llu of %llu failed: iova %#llx pa %#llx\n",
+-			    mapped / PAGE_SIZE, size / PAGE_SIZE, iova, pa);
++			    mapped / GPU_PAGE, size / GPU_PAGE, iova, pa);
+ 		}
+ 	}
+ 	if (!ok) {
+ 		sweet_gpu_vm_unmap(iova, mapped);
+ 		sweet_gpu_iova_free(iova, taken);
+-		IOLog("SWEET GPU: cannot map %llu bytes into the GPU address space (page %llu)\n", size, mapped / PAGE_SIZE);
++		IOLog("SWEET GPU: cannot map %llu bytes into the GPU address space (page %llu)\n", size, mapped / GPU_PAGE);
+ 		return kIOReturnNoMemory;
+ 	}
+ 	slot->iova = iova;
+@@ -482,7 +484,7 @@ SweetAdrenoUserClient::gemInfo(struct sweet_msm_gem_info *r)
+ 				uint64_t old = g->iova, oldLen = g->vaLen, newIova = r->value;
+ 				bool ok = true;
+ 				uint64_t mapped = 0;
+-				for (; mapped < g->size && ok; mapped += PAGE_SIZE) {
++				for (; mapped < g->size && ok; mapped += GPU_PAGE) {
+ 					IOByteCount length = 0;
+ 					addr64_t pa = g->md->getPhysicalSegment(mapped, &length, kIOMemoryMapperNone);
+ 					ok = pa != 0 && sweet_gpu_vm_map(newIova + mapped, pa, (g->flags & SWEET_MSM_BO_GPU_READONLY) != 0);
