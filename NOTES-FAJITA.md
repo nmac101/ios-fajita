@@ -70,6 +70,24 @@ The earlier `sweet_ufs.c` "bad read" theory is **withdrawn**; no evidence of a d
   **Used 2026-10-31 00:32-00:40 UTC: 462 s on the phone, exit 0; host readback of header, bitmap,
   journal, B-trees, `.03`, alt header and 256 sample blocks identical to the image.** The progress
   lines never showed (`$2` inside `ui()` is the function argument; fixed to `FD=$2`).
+- **GPU / Metal restart on this host (2026-10-31).** `/home/edi194/...` paths in old notes and tools
+  belong to the **upstream author's machine** (this repo is a fork); none of those files exist here.
+  Tools now default to `$HOME` paths (SDK `~/theos/sdks/iPhoneOS16.5.sdk`, refs `~/ref`, outputs
+  `~/ios-userland`). Rebuilt from source:
+  - `tools/build-bgair-ios.sh` -> `~/mesa-ios-build/mesa/build-ios/.../libbgair.dylib` (md5 `21b6b6ef...`,
+    ~22 s on this host). It now builds Bergamota's `sweet_drm.c` into `~/ios-userland/libdrm.2.dylib` and
+    copies Chlorophyll's AIR sources (instead of symlinking) so `tools/mesa-ios/chlorophyll-*.patch`
+    apply: **`chlorophyll-551-xr10-srgb.patch`** = the pixel format 551 entry that aborted backboardd
+    on 10-29 (that fix only ever existed on upstream's machine).
+  - `tools/mk-bgmtl-bundle.sh` -> `~/ios-userland/SweetBGMTL.bundle` + `~/ios-userland/usr-local-lib/`
+    {libbgair,libdrm.2}.dylib with `/usr/local/lib` install names (no `@rpath` anywhere, checked by the
+    script) and the AGX-style Info.plist keys. The `+load` logger from 10-29 was not in the repo and is
+    not rebuilt. Binaries are unsigned, as upstream's that loaded in backboardd were.
+  - Boot image `shim/out/shim-boot-0178-gpu.img` (61 MB, fits boot_a): 0178 kernel, real `~/gpu-fw`
+    firmware, `ARENA_MIB=40`, default cmdline + `adreno=9 zap=1 gpuhold=1 metalplugin=1`.
+  - Root image `~/ipsw-x/ios16-root-gpu.img` = reflink copy of the pristine 20H392 image; install
+    needs sudo (user runs it): `install-tree-into-image.sh IMG ~/ios-userland/SweetBGMTL.bundle
+    /System/Library/Extensions` and `install-files-into-image.sh IMG /usr/local/lib <the two dylibs>`.
 - Scratch analysis scripts/dumps: `~/Downloads/ios-fajita-scratch/` (outside git).
 
 ### Previous handoff (2026-10-23, after the input milestone)

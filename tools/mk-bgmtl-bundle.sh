@@ -10,13 +10,23 @@
 # @ path expansion"), which is why those dylibs live in /usr/local/lib.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
-SDK=${IOS_SDK:-/home/edi194/ios-sdk/iPhoneOS16.5.sdk}
-CHL=${CHLOROPHYLL:-/home/edi194/ref/Chlorophyll}
-OUT=${1:-/home/edi194/ios-userland/SweetBGMTL.bundle}
-BG=$HOME/mesa-25.0.7/build-ios/src/gallium/drivers/freedreno/libbgair.dylib
+SDK=${IOS_SDK:-$HOME/theos/sdks/iPhoneOS16.5.sdk}
+CHL=${CHLOROPHYLL:-$HOME/ref/Chlorophyll}
+OUT=${1:-$HOME/ios-userland/SweetBGMTL.bundle}
+BG=${BGAIR:-$HOME/mesa-ios-build/mesa/build-ios/src/gallium/drivers/freedreno/libbgair.dylib}
+# Copies with the install names they have on the device (/usr/local/lib): linking the bundle against
+# these records absolute dependencies, and libbgair itself must not ask for @rpath/libdrm either.
+LIB=$HOME/ios-userland/usr-local-lib
 CC="clang --target=arm64-apple-ios16.0 -isysroot $SDK -O1 -fno-objc-arc -Wall -Wno-deprecated-declarations -fuse-ld=lld -L $SDK/usr/lib -lSystem"
 
 [ -f "$BG" ] || { echo "no libbgair.dylib at $BG (run tools/build-bgair-ios.sh)" >&2; exit 1; }
+
+mkdir -p "$LIB"
+cp -f "$BG" "$LIB/libbgair.dylib"
+cp -f $HOME/ios-userland/libdrm.2.dylib "$LIB/libdrm.2.dylib"
+llvm-install-name-tool -id /usr/local/lib/libbgair.dylib \
+    -change @rpath/libdrm.2.dylib /usr/local/lib/libdrm.2.dylib "$LIB/libbgair.dylib"
+llvm-install-name-tool -id /usr/local/lib/libdrm.2.dylib "$LIB/libdrm.2.dylib"
 
 rm -rf "$OUT"
 mkdir -p "$OUT"
@@ -40,6 +50,27 @@ cat > "$OUT/Info.plist" <<'PLIST'
 	<string>1.0</string>
 	<key>NSPrincipalClass</key>
 	<string>BGMTLDevice</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleSignature</key>
+	<string>????</string>
+	<key>CFBundleSupportedPlatforms</key>
+	<array>
+		<string>iPhoneOS</string>
+	</array>
+	<key>DTPlatformName</key>
+	<string>iphoneos</string>
+	<key>MinimumOSVersion</key>
+	<string>16.0</string>
+	<key>UIDeviceFamily</key>
+	<array>
+		<integer>1</integer>
+		<integer>2</integer>
+	</array>
+	<key>UIRequiredDeviceCapabilities</key>
+	<array>
+		<string>arm64</string>
+	</array>
 </dict>
 </plist>
 PLIST
@@ -47,7 +78,7 @@ PLIST
 $CC -I"$CHL/air" -dynamiclib \
     -install_name /System/Library/Extensions/SweetBGMTL.bundle/SweetBGMTL \
     "$CHL/src/bgmtl.m" \
-    "$BG" /home/edi194/ios-userland/libdrm.2.dylib \
+    "$LIB/libbgair.dylib" "$LIB/libdrm.2.dylib" \
     -framework Foundation -framework Metal -framework IOSurface \
     -o "$OUT/SweetBGMTL"
 
@@ -55,5 +86,6 @@ chmod 0755 "$OUT/SweetBGMTL"
 file "$OUT/SweetBGMTL"
 echo
 echo "===== dependencies (must not be @rpath) ====="
-llvm-objdump --macho --dylibs-used "$OUT/SweetBGMTL" 2>/dev/null
+llvm-objdump --macho --dylibs-used "$OUT/SweetBGMTL" "$LIB/libbgair.dylib" 2>/dev/null
+! llvm-otool -L "$OUT/SweetBGMTL" "$LIB/libbgair.dylib" | grep -q '@rpath' || { echo "an @rpath dependency is left" >&2; exit 1; }
 ls -la "$OUT"

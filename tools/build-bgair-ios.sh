@@ -11,11 +11,11 @@
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 W=${1:-$HOME/mesa-ios-build}
-SDK=${IOS_SDK:-/home/edi194/ios-sdk/iPhoneOS16.5.sdk}
+SDK=${IOS_SDK:-$HOME/theos/sdks/iPhoneOS16.5.sdk}
 MESA_REF=${MESA_REF:-mesa-25.0.7}
 DRM_REF=${DRM_REF:-libdrm-2.4.124}
-BERG=${BERGAMOTA:-/home/edi194/ref/Bergamota}
-CHL=${CHLOROPHYLL:-/home/edi194/ref/Chlorophyll}
+BERG=${BERGAMOTA:-$HOME/ref/Bergamota}
+CHL=${CHLOROPHYLL:-$HOME/ref/Chlorophyll}
 export PATH="$HOME/.local/bin:$PATH"
 
 mkdir -p "$W"
@@ -33,8 +33,11 @@ for p in "$BERG/gpu/eagl/mesa/bergamota-mesa-25.0.7.patch" "$CHL"/patches/*.patc
 done
 
 # the AIR sources live in Chlorophyll/air in the reference tree
+# (copied, not linked, so our fixes in tools/mesa-ios/chlorophyll-*.patch never touch $CHL)
+rm -rf src/compiler/air
 mkdir -p src/compiler/air
-for f in "$CHL"/air/*; do ln -sf "$f" "src/compiler/air/$(basename "$f")"; done
+cp "$CHL"/air/* src/compiler/air/
+for p in "$HERE"/mesa-ios/chlorophyll-*.patch; do patch -s -p1 -d src/compiler/air/.. < "$p"; done
 
 # --- meson edits: "msm over a libdrm stand-in, no KMS" --------------------------------
 python3 - <<'PY'
@@ -59,7 +62,15 @@ PY
 
 # --- pkg-config for the iOS target --------------------------------------------------
 mkdir -p "$W/pc" "$W/drm-link"
-[ -f "$W/drm-link/libdrm.2.dylib" ] || cp -f /home/edi194/ios-userland/libdrm.2.dylib "$W/drm-link/"
+# Bergamota's libdrm stand-in (sweet_drm.c: drm ioctls -> the SweetAdreno630 IOKit user client)
+if [ ! -f "$HOME/ios-userland/libdrm.2.dylib" ]; then
+    mkdir -p "$HOME/ios-userland"
+    clang --target=arm64-apple-ios16.0 -isysroot "$SDK" -O2 -Wall -dynamiclib \
+        -install_name @rpath/libdrm.2.dylib -current_version 2.4.0 -compatibility_version 2.0.0 \
+        -fuse-ld=lld -L "$SDK/usr/lib" -lSystem "$BERG/gpu/freedreno-sweet/sweet_drm.c" \
+        -o "$HOME/ios-userland/libdrm.2.dylib" -framework IOKit -framework CoreFoundation
+fi
+cp -f "$HOME/ios-userland/libdrm.2.dylib" "$W/drm-link/"
 ln -sf libdrm.2.dylib "$W/drm-link/libdrm.dylib"
 cat > "$W/pc/libdrm.pc" <<EOP
 Name: libdrm

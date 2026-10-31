@@ -5,8 +5,8 @@
 #   tools/mk-metal-probe.sh [OUTDIR]        default: ~/ios-userland/SweetMetalProbe.bundle
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
-SDK=${IOS_SDK:-/home/edi194/ios-sdk/iPhoneOS16.5.sdk}
-OUT=${1:-/home/edi194/ios-userland/SweetMetalProbe.bundle}
+SDK=${IOS_SDK:-$HOME/theos/sdks/iPhoneOS16.5.sdk}
+OUT=${1:-$HOME/ios-userland/SweetMetalProbe.bundle}
 
 rm -rf "$OUT"
 mkdir -p "$OUT"

@@ -36,8 +36,8 @@ python3 "$here/tools/mkinit.py" "$work/gputest.o" "$work/sweetgputest"
 SDK=${SDK:-}
 if [[ -z $SDK ]]; then
 	for cand in "$HOME/ios-sdk/iPhoneOS16.5.sdk" \
-	            "/home/$(logname 2>/dev/null || echo edi194)/ios-sdk/iPhoneOS16.5.sdk" \
-	            /home/edi194/ios-sdk/iPhoneOS16.5.sdk; do
+	            "/home/$(logname 2>/dev/null)/theos/sdks/iPhoneOS16.5.sdk" \
+	            "/home/$(logname 2>/dev/null)/ios-sdk/iPhoneOS16.5.sdk"; do
 		[[ -d $cand ]] && { SDK=$cand; break; }
 	done
 fi

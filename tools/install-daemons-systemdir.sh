@@ -6,7 +6,7 @@
 # no launchd patches, so it scans /System/Library/LaunchDaemons - write the same two plists
 # there.
 #
-#   sudo tools/install-daemons-systemdir.sh /home/edi194/ipsw-x/ios16-root-gpu.img
+#   sudo tools/install-daemons-systemdir.sh $HOME/ipsw-x/ios16-root-gpu.img
 set -euo pipefail
 
 here=$(cd "$(dirname "$0")/.." && pwd)
