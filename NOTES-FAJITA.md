@@ -51,7 +51,13 @@ The earlier `sweet_ufs.c` "bad read" theory is **withdrawn**; no evidence of a d
   both SweetFramebuffer and SweetHIDTouch so touches stay aligned. CI `41146642772` (macos-15) ->
   `xnu/out-0177` SHA256 `8b4bbdb0...0166`. Test images (fastboot boot only, 86 MB):
   `shim/out/shim-boot-0177-y0.img` (top aligned; costs the bottom 96 px = home indicator + dock
-  bottom) and `-y24.img` (half way). Result pending. Proper fix still = native panel + safe-area
+  bottom) and `-y24.img` (half way). Result pending.
+- **y0 test (user): "cuts off too much".** Crop is the wrong approach. **0178** (idea from
+  qfl152/ios-fajita `6bb635c`, adapted to 1080x2340): `SweetFramebuffer::present` scales the whole
+  logical 1125x2436 display onto the panel (nearest neighbour), touch divides by the panel size
+  (1080/2340), so nothing is cropped and taps land where drawn. 0177's offsets are now unused.
+  CI `41148483830` -> `xnu/out-0178` SHA256 `b186f463...d9d6`; image `shim/out/shim-boot-0178.img`
+  (default cmdline). Result pending. Proper fix still = native panel + safe-area
   insets (see "Cosmetics backlog").
 - Scratch analysis scripts/dumps: `~/Downloads/ios-fajita-scratch/` (outside git).
 
