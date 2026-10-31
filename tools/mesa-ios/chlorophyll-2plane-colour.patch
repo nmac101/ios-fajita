@@ -7,7 +7,7 @@
 -      if (sr != 0 || sb.planes > 1 || sb.bytes_per_row == 0) {
 +      /* fajita: QuartzCore's display surfaces with Metal are 'b3a8' (RGB10A8_2P_XR10[_sRGB], 550/551): two planes, colour then
 +       * an A8 plane. The kernel's top-level offset and pitch are the colour plane's, which is all a 550/551 texture renders
-+       * (as BGRA8, see the table) and all the compositor scans out; bgmtl refuses textures on any other plane. */
++       * (see the table) and all the compositor scans out; bgmtl refuses textures on any other plane. */
 +      bool colour_plane = shape->pixel_format == 550 || shape->pixel_format == 551;
 +      if (sr != 0 || (sb.planes > 1 && !colour_plane) || sb.bytes_per_row == 0) {
           say(why, why_size, "the kernel would not describe IOSurface %d (error %d, planes %u, %u bytes a row): it knows nothing of an ID that "

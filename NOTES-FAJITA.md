@@ -106,6 +106,18 @@ The earlier `sweet_ufs.c` "bad read" theory is **withdrawn**; no evidence of a d
   `|| true` then skipped the whole patch -> ir3_disk_cache.c build errors): now `git clean -fdq` and a
   failed patch stops the build. Outputs md5: SweetBGMTL `90c948c4f73e...`, libbgair `2cec0001afe8...`.
   Not yet on the phone (needs the sudo install into `ios16-root-gpu.img` + reflash).
+- **"Failed to load/authenticate boot image: Load Error" on EVERY `fastboot boot` (even OrangeFox), 2026-10-31:**
+  `getvar slot-unbootable:a` = yes, `slot-retry-count:a` = 0. iOS never marks the slot successful (no Android
+  boot_control), so each normal boot from boot_a costs a retry; after 7 the slot is unbootable and this ABL
+  refuses `fastboot boot` too. Fix: `fastboot set_active a` (resets retry count to 7, clears unbootable; only
+  slot attributes). Expect it again after ~7 normal boots - check `fastboot getvar slot-retry-count:a` first.
+- **Upstream merge 0ecd69c: `0176-fajita-present-10bit-surfaces.patch`** - present() decodes 'b3a8' surfaces
+  as 10-bit words (b bits 0-9, g 10-19, r 20-29). Applies with our 0177 (CI `41213672924` -> `xnu/out-0176p`
+  SHA256 `0b6ed393...`, both patches applied). Matching userspace change:
+  `tools/mesa-ios/chlorophyll-xr10-as-10bit.patch` (550/551 -> PIPE_FORMAT_B10G10R10A2_UNORM, replaces the
+  551-as-BGRA8 patch). **That libbgair rebuild was interrupted and is NOT in the image on the phone** (the
+  phone still has 550/551 as BGRA8). Boot 15:33 UTC: `shim-boot-0176p-metal.img` (0176p + gpu + metalplugin=1),
+  fastboot boot only; boot_a = `shim-boot-0177r-gpu-nometal.img`.
 - **GPU / Metal restart on this host (2026-10-31).** `/home/edi194/...` paths in old notes and tools
   belong to the **upstream author's machine** (this repo is a fork); none of those files exist here.
   Tools now default to `$HOME` paths (SDK `~/theos/sdks/iPhoneOS16.5.sdk`, refs `~/ref`, outputs
