@@ -267,6 +267,20 @@ cores. Reached 2026-10-23 ~12:30.
 
 ## Environment
 
+- **Current build host (since 2026-10-28): Fedora 44 Linux, user `nmac101`**, repo at
+  `~/Downloads/ios-fajita`. Kernel CI now on `macos-15` (`xnu.yml`).
+- **Packages: ask the user to install them (user rule, 2026-10-31).** Do not pip/dnf/brew-install
+  anything yourself; name the package and wait. No sudo password is available to agents.
+  Installed so far: `meson` (system-wide, 1.11.2). Already present: clang 22, ld64.lld, ninja,
+  mako, pyyaml, `fastboot`/`adb`, `img2simg`, `debugfs`, `7z`, `gh`.
+- Local inputs: iOS IPSW + root image in `~/ipsw-x/`; iOS SDK `~/theos/sdks/iPhoneOS16.5.sdk`;
+  GPU firmware `~/gpu-fw/a630_*` (re-extracted 2026-10-31 with `debugfs` from OxygenOS 11.1.2.2
+  `vendor.img` `/firmware/`, in `~/Documents/platform-tools/fajita/OxygenOS/11.1.2.2 (latest)/extracted/`);
+  Bergamota + Chlorophyll cloned to `~/ref/` (ry-diffusion, 2026-10-31). OrangeFox:
+  `~/Documents/platform-tools/fajita/OrangeFox-R12.0-Unofficial-fajita-V7.img`.
+
+Older setup (Windows/WSL, kept for history):
+
 - Windows 11 Home, Ryzen 5 4500U (6c/6t), 7.4 GB RAM, 355 GB free on C:.
 - WSL2 Ubuntu (`$USER@host`) now runs the custom 6.6 HFS+ kernel with
   4.9 GiB RAM and 6 CPUs (`.wslconfig`); local builds can use `-j4`.
