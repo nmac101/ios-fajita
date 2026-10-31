@@ -145,6 +145,15 @@ The earlier `sweet_ufs.c` "bad read" theory is **withdrawn**; no evidence of a d
   (self-tests passed: their buffers are < 4 KiB). **0180** steps by 4 KiB (`GPU_PAGE`). CI `41217868861` ->
   `xnu/out-0180` SHA256 `cf73a027...4ae2`; image `shim/out/shim-boot-0180-metal.img`. Note: every 4 KiB map does
   a full TLB invalidate (4x more than before) - batch it if mapping big buffers turns out slow.
+- **0180 boot (16:12 UTC, `logs/sweetlog-1031-0180.txt`): no GPU hang any more; user saw a GPU-drawn frame**
+  (white Apple logo on RED, fading out). Red = the old libbgair writes 550/551 as BGRA8 while 0176-present decodes
+  10-bit: 0xFF000000 (black) read as 10-bit puts the alpha byte in red. Fixed by the 10-bit libbgair (rebuilt,
+  md5 `ce8f13017d24...`, NOT yet in the root image). Remaining: 80x `arena: ... do not fit` (32 of 40 MiB used,
+  195 MiB allocated over the boot) = fragmentation: the 0174 free list never split or merged, and a reused bigger
+  block was never freed (free matched on the requested size). **0181** = best fit + split + merge + give the top
+  back, free by offset; host test `tools/tests/gpu-arena-test.c` (200k random ops, no overlap, empties to 0, two
+  12 MiB + 4 MiB fit after churn). SpringBoard SIGSEGV far 0x14 loop (29x) persists - probably a NULL after a
+  refused allocation; recheck after 0181.
 - **GPU / Metal restart on this host (2026-10-31).** `/home/edi194/...` paths in old notes and tools
   belong to the **upstream author's machine** (this repo is a fork); none of those files exist here.
   Tools now default to `$HOME` paths (SDK `~/theos/sdks/iPhoneOS16.5.sdk`, refs `~/ref`, outputs
