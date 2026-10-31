@@ -138,6 +138,13 @@ The earlier `sweet_ufs.c` "bad read" theory is **withdrawn**; no evidence of a d
   SMMU sGFSR and cb0/cb1 FSR/FAR/FSYNR0/1. Read-only (except the SQE stat index), once per fence. CI
   `41216148185` -> `xnu/out-0179` SHA256 `3e357534...a4da`. Image `shim/out/shim-boot-0179-metal.img`
   (+ gpu + metalplugin=1), `fastboot boot` 15:54 UTC; root still the 15:0x flash (libbgair 550/551 as BGRA8).
+- **Hang root cause (0179 dump, `logs/sweetlog-1031-hang.txt`):** fence stuck at 3, CP at `ib1 0x80764000 rem 24`,
+  `ib2 0x80725600`, **SMMU cb1 FSR 0x402 (translation fault) FAR 0x80725600, FSYNR0 0x3 (level-3 lookup, read)**.
+  Cause: `SweetAdrenoUserClient::mapGem()` (and the SET_IOVA move loop) stepped by PAGE_SIZE = 16 KiB while
+  `sweet_gpu_vm_map()` enters one 4 KiB GPU PTE -> only the first 4 KiB of every 16 KiB of each BO was mapped
+  (self-tests passed: their buffers are < 4 KiB). **0180** steps by 4 KiB (`GPU_PAGE`). CI `41217868861` ->
+  `xnu/out-0180` SHA256 `cf73a027...4ae2`; image `shim/out/shim-boot-0180-metal.img`. Note: every 4 KiB map does
+  a full TLB invalidate (4x more than before) - batch it if mapping big buffers turns out slow.
 - **GPU / Metal restart on this host (2026-10-31).** `/home/edi194/...` paths in old notes and tools
   belong to the **upstream author's machine** (this repo is a fork); none of those files exist here.
   Tools now default to `$HOME` paths (SDK `~/theos/sdks/iPhoneOS16.5.sdk`, refs `~/ref`, outputs
