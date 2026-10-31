@@ -67,6 +67,9 @@ The earlier `sweet_ufs.c` "bad read" theory is **withdrawn**; no evidence of a d
   16 GiB zip fails with `file has too many blocks (262161)` (Android sideload FUSE max = 262144 x 64
   KiB = 16 GiB) - hence gzip (zip is 6.1 GB). Toybox in OrangeFox has gzip/dd/sha256sum/blockdev. The
   pipeline was replayed on the host and reproduces the image SHA (`569f4099...6a81`).
+  **Used 2026-10-31 00:32-00:40 UTC: 462 s on the phone, exit 0; host readback of header, bitmap,
+  journal, B-trees, `.03`, alt header and 256 sample blocks identical to the image.** The progress
+  lines never showed (`$2` inside `ui()` is the function argument; fixed to `FD=$2`).
 - Scratch analysis scripts/dumps: `~/Downloads/ios-fajita-scratch/` (outside git).
 
 ### Previous handoff (2026-10-23, after the input milestone)

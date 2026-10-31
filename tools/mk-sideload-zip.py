@@ -13,7 +13,8 @@ import gzip, hashlib, os, shutil, sys, zipfile
 MIB = 1 << 20
 SCRIPT = r'''#!/sbin/sh
 # $2 = recovery's ui_print fd, $3 = the zip (a FUSE file when sideloaded)
-ui() { echo "ui_print $*" >&$2; echo "ui_print" >&$2; }
+FD=$2   # $2 inside a function would be the function's own argument
+ui() { echo "ui_print $*" >&$FD; echo "ui_print" >&$FD; }
 die() { ui "ERROR: $*"; exit 1; }
 ZIP=$3
 DEV=$(readlink -f /dev/block/by-name/userdata)
