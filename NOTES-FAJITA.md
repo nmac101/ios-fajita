@@ -70,6 +70,15 @@ The earlier `sweet_ufs.c` "bad read" theory is **withdrawn**; no evidence of a d
   **Used 2026-10-31 00:32-00:40 UTC: 462 s on the phone, exit 0; host readback of header, bitmap,
   journal, B-trees, `.03`, alt header and 256 sample blocks identical to the image.** The progress
   lines never showed (`$2` inside `ui()` is the function argument; fixed to `FD=$2`).
+- **Sideload zip v2 (2026-10-31): userdata + kernel, verbose.** `tools/flash-userdata-sideload.sh IMAGE
+  BOOTIMG|-`. Payload = 64 independent gzip chunks of 256 MiB + the raw boot image; `update-binary`
+  checks PARTNAME (userdata, `boot$(getprop ro.boot.slot_suffix)`) and sizes, prints the current boot
+  sha, then per chunk: unpack, write, read back, compare sha256 (3 tries), one `[n/64] ... eta` line
+  each + `set_progress`; clears a stale GPT; writes and verifies the boot image LAST (only after all of
+  userdata verified). Lines are tagged `[fajita]`; the wrapper backs up the live boot partition to
+  `~/ios-fajita-backups/` when started with the phone in normal recovery, then prints the phone's
+  `[fajita]` log after the run. Host self-test with fake partitions (stub blockdev/getprop): 41 s, image
+  and boot byte-identical, stale GPT cleared; wrong PARTNAME and too-small userdata refused before writing.
 - **GPU / Metal restart on this host (2026-10-31).** `/home/edi194/...` paths in old notes and tools
   belong to the **upstream author's machine** (this repo is a fork); none of those files exist here.
   Tools now default to `$HOME` paths (SDK `~/theos/sdks/iPhoneOS16.5.sdk`, refs `~/ref`, outputs
