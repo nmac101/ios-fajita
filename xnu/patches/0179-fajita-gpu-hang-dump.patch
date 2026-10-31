@@ -1,0 +1,111 @@
+diff --git a/bsd/dev/sweet_gpu.c b/bsd/dev/sweet_gpu.c
+index eec3b20..4bb2619 100644
+--- a/bsd/dev/sweet_gpu.c
++++ b/bsd/dev/sweet_gpu.c
+@@ -334,6 +334,19 @@ extern void delay(unsigned);
+ #define A6XX_RBBM_INT_0_STATUS  0x0201u
+ #define A6XX_RBBM_INT_CLEAR_CMD 0x0037u
+ #define A6XX_CP_PROTECT_STATUS  0x0824u
++/* hang dump (a6xx.xml dword offsets) */
++#define A6XX_RBBM_STATUS1       0x0211u
++#define A6XX_RBBM_STATUS2       0x0212u
++#define A6XX_RBBM_STATUS3       0x0213u
++#define A6XX_CP_IB1_BASE        0x0928u   /* 64-bit: lo, hi */
++#define A6XX_CP_IB1_REM_SIZE    0x092au
++#define A6XX_CP_IB2_BASE        0x092bu
++#define A6XX_CP_IB2_REM_SIZE    0x092du
++#define A6XX_CP_SQE_STAT_ADDR   0x0908u
++#define A6XX_CP_SQE_STAT_DATA   0x0909u
++#define GPU_SMMU_CB_FAR         0x060u    /* 64-bit: lo, hi */
++#define GPU_SMMU_CB_FSYNR0      0x068u
++#define GPU_SMMU_CB_FSYNR1      0x06cu
+ #define GPU_CP_SCRATCH_MEMWR   0x100u   /* the value CP_MEM_WRITE leaves behind */
+ #define GPU_CP_SCRATCH_TS      0x110u   /* CACHE_FLUSH_TS writes the sequence here */
+ #define GPU_CP_SCRATCH_FILL    0x200u   /* the 256-byte fill self-test lands here */
+@@ -1905,6 +1918,64 @@ sweet_gpu_report(const char *why)
+ 	    gpu_cp_wptr, gpu_cp_seq, gpu_pte_used);
+ }
+ 
++/*
++ * A submission whose fence never lands: log where the CP stopped and whether the SMMU
++ * faulted, once per fence. Only reads, except the SQE stat index (Linux's a6xx crash dump
++ * does the same); nothing is reset or cleared, so a second dump shows the same state.
++ */
++void
++sweet_gpu_hang_dump(const char *why)
++{
++	static uint32_t dumped;
++	vm_offset_t c = gpu_core;
++
++	if (!gpu_live || c == 0 || gpu_blob == 0) {
++		printf("SWEET GPU HANG (%s): GPU not live, nothing to read\n", why);
++		return;
++	}
++	if (dumped == gpu_cp_seq) {
++		return;
++	}
++	dumped = gpu_cp_seq;
++	printf("SWEET GPU HANG (%s): fence at %u, last submitted %u; ring rptr %u wptr %u\n", why,
++	    *(volatile uint32_t *)(gpu_blob + GPU_CP_SCRATCH + GPU_CP_SCRATCH_FENCE), gpu_cp_seq,
++	    gpu_cp_rd(c, A6XX_CP_RB_RPTR), gpu_cp_wptr);
++	printf("SWEET GPU HANG: rbbm_status %#x %#x %#x %#x rbbm_int0 %#x\n",
++	    gpu_cp_rd(c, A6XX_RBBM_STATUS), gpu_cp_rd(c, A6XX_RBBM_STATUS1),
++	    gpu_cp_rd(c, A6XX_RBBM_STATUS2), gpu_cp_rd(c, A6XX_RBBM_STATUS3),
++	    gpu_cp_rd(c, A6XX_RBBM_INT_0_STATUS));
++	printf("SWEET GPU HANG: cp_status1 %#x hw_fault %#x cp_irq %#x protect %#x\n",
++	    gpu_cp_rd(c, A6XX_CP_STATUS_1), gpu_cp_rd(c, A6XX_CP_HW_FAULT),
++	    gpu_cp_rd(c, A6XX_CP_INTERRUPT_STATUS), gpu_cp_rd(c, A6XX_CP_PROTECT_STATUS));
++	printf("SWEET GPU HANG: ib1 %#llx rem %u dwords, ib2 %#llx rem %u dwords\n",
++	    (uint64_t)gpu_cp_rd(c, A6XX_CP_IB1_BASE + 1) << 32 | gpu_cp_rd(c, A6XX_CP_IB1_BASE),
++	    gpu_cp_rd(c, A6XX_CP_IB1_REM_SIZE),
++	    (uint64_t)gpu_cp_rd(c, A6XX_CP_IB2_BASE + 1) << 32 | gpu_cp_rd(c, A6XX_CP_IB2_BASE),
++	    gpu_cp_rd(c, A6XX_CP_IB2_REM_SIZE));
++	uint32_t sqe[8];
++	gpu_cp_wr(c, A6XX_CP_SQE_STAT_ADDR, 0);
++	for (unsigned i = 0; i < 8; i++) {
++		sqe[i] = gpu_cp_rd(c, A6XX_CP_SQE_STAT_DATA);
++	}
++	printf("SWEET GPU HANG: sqe stat %#x %#x %#x %#x %#x %#x %#x %#x\n",
++	    sqe[0], sqe[1], sqe[2], sqe[3], sqe[4], sqe[5], sqe[6], sqe[7]);
++	if (gpu_smmu == 0) {
++		gpu_smmu = ml_io_map(GPU_SMMU, 0x10000);
++	}
++	if (gpu_smmu == 0) {
++		printf("SWEET GPU HANG: smmu not mapped\n");
++		return;
++	}
++	printf("SWEET GPU HANG: smmu sGFSR %#x\n", gpu_rd_quiet(gpu_smmu, GPU_SMMU_SGFSR));
++	for (unsigned cb = 0; cb < 2; cb++) {
++		vm_offset_t b = gpu_smmu + GPU_SMMU_CB(cb);
++		printf("SWEET GPU HANG: smmu cb%u fsr %#x far %#llx fsynr0 %#x fsynr1 %#x\n", cb,
++		    gpu_rd_quiet(b, GPU_SMMU_CB_FSR),
++		    (uint64_t)gpu_rd_quiet(b, GPU_SMMU_CB_FAR + 4) << 32 | gpu_rd_quiet(b, GPU_SMMU_CB_FAR),
++		    gpu_rd_quiet(b, GPU_SMMU_CB_FSYNR0), gpu_rd_quiet(b, GPU_SMMU_CB_FSYNR1));
++	}
++}
++
+ /* ---- stage 8g: memory for the IOKit client ------------------------------------------ */
+ 
+ /*
+diff --git a/iokit/Kernel/arm/SweetAdreno.cpp b/iokit/Kernel/arm/SweetAdreno.cpp
+index e31e5d1..c6458b2 100644
+--- a/iokit/Kernel/arm/SweetAdreno.cpp
++++ b/iokit/Kernel/arm/SweetAdreno.cpp
+@@ -53,6 +53,7 @@ bool sweet_gpu_fence_done(uint32_t fence);
+ uint32_t sweet_gpu_fence_last(void);
+ void sweet_gpu_mark_lost(void);
+ void sweet_gpu_report(const char *why);
++void sweet_gpu_hang_dump(const char *why);
+ bool     sweet_gpu_alloc_pages(uint64_t size, uint64_t *pa, void **kva);
+ void     sweet_gpu_free_pages(uint64_t pa, uint64_t size);
+ /* osfmk/arm64/caches_asm.s: clean the dcache for a physical range via the linear map. */
+@@ -719,6 +720,9 @@ SweetAdrenoUserClient::waitFenceCall(struct sweet_msm_wait_fence *r)
+ 		ret = waitFence(r->fence, ns) ? kIOReturnSuccess : (sweet_gpu_ready() ? kIOReturnTimeout : kIOReturnNotReady);
+ 		IOLog("SWEET ADRENO: wait fence %u (%llu ns) -> %#x, last %u\n", r->fence,
+ 		    (unsigned long long)ns, ret, sweet_gpu_fence_last());
++		if (ret == kIOReturnTimeout) {
++			sweet_gpu_hang_dump("wait fence");
++		}
+ 		/*
+ 		 * The client's own output does not reach the console (launchd gives it a stdout nobody
+ 		 * reads), so the kernel reports what the GPU produced - on timeout too, which is exactly
