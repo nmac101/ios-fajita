@@ -154,6 +154,9 @@ The earlier `sweet_ufs.c` "bad read" theory is **withdrawn**; no evidence of a d
   back, free by offset; host test `tools/tests/gpu-arena-test.c` (200k random ops, no overlap, empties to 0, two
   12 MiB + 4 MiB fit after churn). SpringBoard SIGSEGV far 0x14 loop (29x) persists - probably a NULL after a
   refused allocation; recheck after 0181.
+- **16:33-16:42 UTC sideload:** `ios16-root-gpu.img` (sha `00b3ef67...`, 10-bit libbgair `ce8f1301...`) + boot_a =
+  `shim-boot-0177r-gpu-nometal.img`, all verified. Next: first boot (migration) on boot_a, then `fastboot boot
+  shim/out/shim-boot-0181-metal.img` (0181 = 0176p+0177+0179+0180+0181, CI `41219399856`, SHA256 `bc3930d1...`).
 - **GPU / Metal restart on this host (2026-10-31).** `/home/edi194/...` paths in old notes and tools
   belong to the **upstream author's machine** (this repo is a fork); none of those files exist here.
   Tools now default to `$HOME` paths (SDK `~/theos/sdks/iPhoneOS16.5.sdk`, refs `~/ref`, outputs
