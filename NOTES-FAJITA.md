@@ -79,6 +79,21 @@ The earlier `sweet_ufs.c` "bad read" theory is **withdrawn**; no evidence of a d
   `~/ios-fajita-backups/` when started with the phone in normal recovery, then prints the phone's
   `[fajita]` log after the run. Host self-test with fake partitions (stub blockdev/getprop): 41 s, image
   and boot byte-identical, stale GPT cleared; wrong PARTNAME and too-small userdata refused before writing.
+- **2026-10-31: GPU flash -> black screen; 0178 reverted (user request).** Sideload v2 flashed
+  `ios16-root-gpu.img` (sha `7027c264...`) + `shim-boot-0178-gpu.img` to boot_a: 565 s, all 64 chunks
+  and boot_a verified; old boot_a backed up to `~/ios-fajita-backups/boot_a-20261031-011002.img`.
+  The boot showed a black screen. Log `logs/sweetlog-1031-black.txt`: GPU bring-up completes (GMU
+  firmware, HFI, zap, stage 8 kept up), Metal loads SweetBGMTL **inside backboardd**
+  (`rwa_device_open: FD630`, QuartzCore `default.metallib` loaded, no pipeline abort - the 551 patch
+  works), and backboardd presents frames as surfaces of format **0x62336138, bpr 4544** (the working
+  CPU-rendered boots present `BGRA` 0x42475241, bpr 4608). So the black screen in this boot comes
+  from the Metal path (GPU-rendered frames do not reach the panel), not from 0178's scaling. ("SWEET
+  LOG: panic flush" lines are the log flush, not a panic; the boot ran on.) The earlier bold-text
+  black screen happened on the non-GPU 0178 kernel and its log was overwritten, cause unknown.
+  0178 reverted anyway (commit `efcfc22`, CI `41195307648` -> `xnu/out-0177r` SHA256 `9ac122ce...`,
+  `present()` back to the plain row copy, 0 divisions). Test images: `shim-boot-0177r-gpu-nometal.img`
+  (GPU up, stub Metal plugin declines -> CPU rendering; booted with `fastboot boot` 11:11 UTC) and
+  `shim-boot-0177r-gpu.img` (+ metalplugin=1). boot_a still holds 0178-gpu.
 - **GPU / Metal restart on this host (2026-10-31).** `/home/edi194/...` paths in old notes and tools
   belong to the **upstream author's machine** (this repo is a fork); none of those files exist here.
   Tools now default to `$HOME` paths (SDK `~/theos/sdks/iPhoneOS16.5.sdk`, refs `~/ref`, outputs
