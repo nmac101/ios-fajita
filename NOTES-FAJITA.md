@@ -94,6 +94,18 @@ The earlier `sweet_ufs.c` "bad read" theory is **withdrawn**; no evidence of a d
   `present()` back to the plain row copy, 0 divisions). Test images: `shim-boot-0177r-gpu-nometal.img`
   (GPU up, stub Metal plugin declines -> CPU rendering; booted with `fastboot boot` 11:11 UTC) and
   `shim-boot-0177r-gpu.img` (+ metalplugin=1). boot_a still holds 0178-gpu.
+- **Why Metal rendered black (2026-10-31, from `logs/sweetlog-1031-black.txt`):** with Metal, backboardd's
+  display surfaces are `b3a8` = RGB10A8_2P_XR10 (2 planes: colour 4544 B/row, then A8). Chlorophyll's
+  import refused every one: `texture refused: the kernel would not describe IOSurface 2 (error 0, planes 2,
+  4544 bytes a row)` -> no render target -> zero GEM_SUBMIT (0x46) in the whole boot -> empty frames.
+  Fixes: `tools/mesa-ios/chlorophyll-2plane-colour.patch` (accept planes > 1 for formats 550/551: the
+  kernel's top-level offset/pitch are the colour plane, rendered as BGRA8 = what present() scans out) and
+  `tools/mesa-ios/bgmtl-plane0-only.patch` (refuse IOSurface textures on plane != 0, logged, so nothing
+  aliases the colour plane); `mk-bgmtl-bundle.sh` now builds a patched copy of bgmtl.m.
+  `build-bgair-ios.sh` was not rerunnable (`git checkout .` left files the Bergamota patch had added, the
+  `|| true` then skipped the whole patch -> ir3_disk_cache.c build errors): now `git clean -fdq` and a
+  failed patch stops the build. Outputs md5: SweetBGMTL `90c948c4f73e...`, libbgair `2cec0001afe8...`.
+  Not yet on the phone (needs the sudo install into `ios16-root-gpu.img` + reflash).
 - **GPU / Metal restart on this host (2026-10-31).** `/home/edi194/...` paths in old notes and tools
   belong to the **upstream author's machine** (this repo is a fork); none of those files exist here.
   Tools now default to `$HOME` paths (SDK `~/theos/sdks/iPhoneOS16.5.sdk`, refs `~/ref`, outputs

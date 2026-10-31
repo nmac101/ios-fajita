@@ -27,9 +27,9 @@ cd "$W"
 [ -d libdrm ] || git clone -q --depth 1 --branch libdrm-2.4.124 \
     https://gitlab.freedesktop.org/mesa/drm.git libdrm
 cd mesa
-git checkout -q .
+git checkout -q . && git clean -fdq   # patches add files: a rerun must start from the clean tag
 for p in "$BERG/gpu/eagl/mesa/bergamota-mesa-25.0.7.patch" "$CHL"/patches/*.patch; do
-    git apply "$p" 2>/dev/null || true
+    git apply "$p" || { echo "patch did not apply: $p" >&2; exit 1; }
 done
 
 # the AIR sources live in Chlorophyll/air in the reference tree

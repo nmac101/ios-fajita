@@ -75,9 +75,15 @@ cat > "$OUT/Info.plist" <<'PLIST'
 </plist>
 PLIST
 
+# bgmtl.m from Chlorophyll plus our fixes (tools/mesa-ios/bgmtl-*.patch), built from a copy
+SRC=$(mktemp -d)
+trap 'rm -rf "$SRC"' EXIT
+cp "$CHL/src/bgmtl.m" "$SRC/bgmtl.m"
+for p in "$HERE"/mesa-ios/bgmtl-*.patch; do patch -s -p2 -d "$SRC" < "$p"; done
+
 $CC -I"$CHL/air" -dynamiclib \
     -install_name /System/Library/Extensions/SweetBGMTL.bundle/SweetBGMTL \
-    "$CHL/src/bgmtl.m" \
+    "$SRC/bgmtl.m" \
     "$LIB/libbgair.dylib" "$LIB/libdrm.2.dylib" \
     -framework Foundation -framework Metal -framework IOSurface \
     -o "$OUT/SweetBGMTL"
