@@ -118,6 +118,20 @@ The earlier `sweet_ufs.c` "bad read" theory is **withdrawn**; no evidence of a d
   551-as-BGRA8 patch). **That libbgair rebuild was interrupted and is NOT in the image on the phone** (the
   phone still has 550/551 as BGRA8). Boot 15:33 UTC: `shim-boot-0176p-metal.img` (0176p + gpu + metalplugin=1),
   fastboot boot only; boot_a = `shim-boot-0177r-gpu-nometal.img`.
+- **Metal boot 2 (0176p + metalplugin=1, 15:33 UTC; `logs/sweetlog-1031-metal2.txt`): still black, but further.**
+  - The 2-plane import works now: backboardd builds its pipelines and makes the **first real GPU submission**
+    (`submit 25 bos 5 cmds, ib 0x8072c000 72 dwords, fence 4`, `rbbm_status 0x800005` at submit). **Fence 4
+    never retires** (`wait fence 4 -> 0xe00002d6` twice, "command buffer failed: the GPU did not finish the
+    work within the fence timeout"). Only 2 GEM_SUBMITs in the whole boot = the GPU hangs on the first draw.
+    The kernel prints no hang state (no RBBM/CP/SMMU fault registers) - that dump is the next tool to write.
+  - **Arena too small:** `arena: 12582912 bytes do not fit (32079872 of 41943040 used)` -> "would not allocate
+    a 1125x2436 ... RGB10A8_2P_XR10" texture. 40 MiB is the boot_a ceiling (blob in the 64 MiB image); a
+    real fix needs GPU memory from normal pages (the old "option 2").
+  - **SpringBoard SIGSEGV loop** (12x, far 0x14, pc in a non-cache image at 0x10...): SpringBoard opens
+    SweetAdreno630 too (Metal loads the plugin there), so likely a NULL from a refused allocation inside our
+    Metal stack. Not symbolicated (no image list in the log).
+  - One "planes 2" refusal still happens for IOSurface 2: a texture of a format other than 550/551 on it.
+  - `fastboot boot` failed with "Load Error" until `fastboot set_active a` (see above).
 - **GPU / Metal restart on this host (2026-10-31).** `/home/edi194/...` paths in old notes and tools
   belong to the **upstream author's machine** (this repo is a fork); none of those files exist here.
   Tools now default to `$HOME` paths (SDK `~/theos/sdks/iPhoneOS16.5.sdk`, refs `~/ref`, outputs
