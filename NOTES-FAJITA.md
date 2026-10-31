@@ -157,6 +157,13 @@ The earlier `sweet_ufs.c` "bad read" theory is **withdrawn**; no evidence of a d
 - **16:33-16:42 UTC sideload:** `ios16-root-gpu.img` (sha `00b3ef67...`, 10-bit libbgair `ce8f1301...`) + boot_a =
   `shim-boot-0177r-gpu-nometal.img`, all verified. Next: first boot (migration) on boot_a, then `fastboot boot
   shim/out/shim-boot-0181-metal.img` (0181 = 0176p+0177+0179+0180+0181, CI `41219399856`, SHA256 `bc3930d1...`).
+- **0181 Metal boot (17:20 UTC, `logs/sweetlog-1031-0181.txt`): colours right (Apple logo on black), then black.**
+  0 hangs; 2 submits, 3 swaps. Arena genuinely full now (not fragmentation): 30.6 of 40 MiB live when a
+  12 MiB RGB10A8_2P_XR10 texture is asked for, then 18x 4 MiB refused (`bo_new: kernel refused`). 7 SpringBoard
+  crashes (was 29). Also 2x `texture refused ... IOSurface 2/3 planes 2` = a texture of a format other than
+  550/551 on the display surface (format not logged - add it to that message next time the lib is rebuilt).
+  Next try: **`shim/out/shim-boot-0181-metal-a160.img`** (ARENA_MIB=160, 187 MB, fastboot boot only; kernel
+  max is 256 MiB and IO_MAP_SIZE 256 MiB), booted 17:28 UTC.
 - **GPU / Metal restart on this host (2026-10-31).** `/home/edi194/...` paths in old notes and tools
   belong to the **upstream author's machine** (this repo is a fork); none of those files exist here.
   Tools now default to `$HOME` paths (SDK `~/theos/sdks/iPhoneOS16.5.sdk`, refs `~/ref`, outputs
