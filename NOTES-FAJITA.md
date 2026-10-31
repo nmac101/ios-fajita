@@ -132,6 +132,12 @@ The earlier `sweet_ufs.c` "bad read" theory is **withdrawn**; no evidence of a d
     Metal stack. Not symbolicated (no image list in the log).
   - One "planes 2" refusal still happens for IOSurface 2: a texture of a format other than 550/551 on it.
   - `fastboot boot` failed with "Load Error" until `fastboot set_active a` (see above).
+- **0179 GPU hang dump** (`0179-fajita-gpu-hang-dump.patch`): on a WAIT_FENCE timeout `sweet_gpu_hang_dump()`
+  logs `SWEET GPU HANG:` lines - fence value vs last submitted, ring rptr/wptr, RBBM_STATUS..3, RBBM_INT_0,
+  CP_STATUS_1/HW_FAULT/INTERRUPT_STATUS/PROTECT_STATUS, CP_IB1/IB2 base + remaining dwords, 8 SQE stat words,
+  SMMU sGFSR and cb0/cb1 FSR/FAR/FSYNR0/1. Read-only (except the SQE stat index), once per fence. CI
+  `41216148185` -> `xnu/out-0179` SHA256 `3e357534...a4da`. Image `shim/out/shim-boot-0179-metal.img`
+  (+ gpu + metalplugin=1), `fastboot boot` 15:54 UTC; root still the 15:0x flash (libbgair 550/551 as BGRA8).
 - **GPU / Metal restart on this host (2026-10-31).** `/home/edi194/...` paths in old notes and tools
   belong to the **upstream author's machine** (this repo is a fork); none of those files exist here.
   Tools now default to `$HOME` paths (SDK `~/theos/sdks/iPhoneOS16.5.sdk`, refs `~/ref`, outputs
